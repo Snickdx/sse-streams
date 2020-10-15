@@ -1,0 +1,156 @@
+<!DOCTYPE HTML>
+
+<html>
+	<head>
+		<title>Flask Template</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <style>
+      h1{
+        font-size: 2em;
+      }
+      
+    </style>
+  </head>
+	<body>
+
+  <nav class="blue">
+    <div class="blue nav-wrapper" style="margin-left:5px">
+      <a href="#" class="brand-logo">Streaming Example</a>
+    </div>
+  </nav>
+  
+  <div class="container">
+    <div class="row">
+      <p>
+        This app streams data from  <a href="https://stream-example.snickdx.repl.co/movies/stream">https://stream-example.snickdx.repl.co/movies/stream</a>
+      </p>
+      
+      <div class="row">
+          <div class="switch">
+            <label>
+              Use Event Source API
+              <input type="checkbox" id="apiSwitch">
+              <span class="lever"></span>
+              Use Fetch API 
+            </label>
+          </div>    
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="startBtn" class="blue btn waves-effect waves-light">
+          Start Streaming
+        </button>
+
+        <button id="stopBtn" class="blue btn waves-effect waves-light" disabled>
+          Stop Streaming
+        </button>
+       
+        <span id="message"></span>
+      </div>
+      
+    </div>
+
+    <div class="row">
+      <div class="col s12 m12" style="max-height:65vh; overflow-y:scroll" id="result">
+        
+      </div>
+    </div>
+  </div>
+
+    <script>
+      const result = document.querySelector('#result');
+      const startBtn = document.querySelector('#startBtn');
+      const stopBtn = document.querySelector('#stopBtn');
+      const message = document.querySelector('#message');
+      count = 0;
+
+      startBtn.addEventListener('click', start);
+
+      function start(){
+        const apiSwitch = document.querySelector('#apiSwitch');
+        if (apiSwitch.checked){
+          startFetchStream();
+        }else{
+          startEventSource();
+        }
+        enableStopButton();
+      }
+
+      function renderMovie(movie){
+        const card = document.createElement("DIV");
+        card.className = 'col s12 m3 card';
+        card.innerHTML += `
+            <div class="card-image">
+              <img src="${movie.poster_url}">
+            </div>
+            <div class="card-content">
+              Rating: ${movie.rating}
+              Rotten Tomatoes: ${movie.rt_score}
+              IMDB: ${movie.imdb_rating}
+              year: ${movie.year}
+            </div>
+        `;
+        result.appendChild(card);
+        card.scrollIntoView({
+          behavior: 'smooth',
+          block:'end',
+          inline:'end'
+        });
+        message.innerHTML = `${count++} Movies Loaded`;
+      }
+
+      function endStream(status){
+          M.toast({html: `Stream ${status}`});
+          stopBtn.setAttribute('disabled', true);
+      }
+
+      function enableStopButton(){
+        stopBtn.removeAttribute('disabled');
+      }
+
+      function startEventSource(){
+        const stream = new EventSource('/movies/stream');
+
+        stream.onmessage = function(event){
+          if(event.data == 'done'){
+            stopEventSource(stream, 'Finished');
+          }else{
+            renderMovie(JSON.parse(event.data));
+          }
+          
+        }
+
+        stopBtn.addEventListener('click', _ => stopEventSource(stream, 'Stopped'));
+      }
+
+      function stopEventSource(stream, status){
+        stream.close();
+        endStream(status);
+      }
+
+      async function startFetchStream(){
+        const response = await fetch('/movies/stream');
+        const reader = response.body.getReader();
+
+        const interval = setInterval(async () => {
+          const { value, done } = await reader.read();
+          if (done) stopFetchStream(interval, 'Finished');
+          const string = new TextDecoder("utf-8").decode(value);
+          const body = string.split('data:')[1]
+          renderMovie(JSON.parse(body));
+        }, 1000);
+          
+        stopBtn.addEventListener('click', _ => stopFetchStream(interval, 'Stopped'));
+      }
+
+      function stopFetchStream(interval, status){
+        clearInterval(interval);
+        endStream(status);
+      }
+          
+    </script>
+	</body>
+</html>
